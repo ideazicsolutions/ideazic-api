@@ -7,17 +7,20 @@ app.get("/", (req, res) => {
   res.send("Ideazic API is running 🚀");
 });
 
+// ✅ NEW: Save booking
 app.post("/booking", (req, res) => {
-  console.log("Received booking:", req.body);
+  const data = req.body;
+
+  console.log("New Booking:", data);
 
   res.json({
     success: true,
     message: "Booking received",
-    data: req.body,
+    data: data
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
