@@ -1,13 +1,15 @@
 const express = require("express");
+const cors = require("cors");
+
 const app = express();
 
+app.use(cors()); // 🔥 IMPORTANT
 app.use(express.json());
 
 app.get("/", (req, res) => {
   res.send("Ideazic API is running 🚀");
 });
 
-// ✅ NEW: Save booking
 app.post("/booking", (req, res) => {
   const data = req.body;
 
@@ -20,8 +22,6 @@ app.post("/booking", (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(3000, () => {
+  console.log("Server running...");
 });
