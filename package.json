@@ -1,11 +1,3 @@
-{
-  "name": "ideazic-api",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2"
-  }
-}
+fetch("https://ideazic-api.onrender.com/")
+.then(res => res.text())
+.then(console.log)
