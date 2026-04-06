@@ -19,18 +19,18 @@ app.post("/booking", async (req, res) => {
 
   try {
     const response = await fetch("https://services.leadconnectorhq.com/contacts/", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
-        Version: "2021-07-28",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        firstName: data.name,
-        phone: data.phone,
-        locationId: process.env.GHL_LOCATION_ID
-      })
-    });
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${process.env.GHL_API_KEY}`,
+    "Content-Type": "application/json",
+    "Version": "2021-07-28"
+  },
+  body: JSON.stringify({
+    firstName: data.name,
+    phone: data.phone,
+    locationId: process.env.GHL_LOCATION_ID
+  })
+});
 
     const result = await response.json();
 
