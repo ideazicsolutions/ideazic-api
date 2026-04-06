@@ -1,3 +1,17 @@
+const express = require("express");
+const cors = require("cors");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Test route
+app.get("/", (req, res) => {
+  res.send("Ideazic API is running 🚀");
+});
+
+// Booking route
 app.post("/booking", async (req, res) => {
   const data = req.body;
 
@@ -30,4 +44,10 @@ app.post("/booking", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Failed" });
   }
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Server running...");
 });
