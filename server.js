@@ -5,6 +5,15 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+
+  if (!apiKey || apiKey !== process.env.API_SECRET_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  next();
+});
 
 // Test route
 app.get("/", (req, res) => {
