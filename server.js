@@ -5,6 +5,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
 app.use((req, res, next) => {
   const apiKey = req.headers["x-api-key"];
 
@@ -27,25 +28,34 @@ app.post("/booking", async (req, res) => {
   console.log("New Booking:", data);
 
   try {
-await fetch("https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/dc71f37a-226a-49f5-ae92-f3f48d85348a", {      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        booking_id: data.id,
-        created_at: data.createdAt,
-        status: data.status,
-        customer_type: data.customerType,
-        services: data.services,
-        next_action: data.nextAction,
-        notes: data.notes,
-        phone_full: `${data.phone?.code || ""}${data.phone?.number || ""}`,
-        first_name: data.firstName,
-        last_name: data.lastName,
-        email: data.email,
-        traveler_count: data.travelers?.length || 0
-      })
-    });
+    const allowedCustomerTypes = ["Direct", "Agency", "Partner"];
+    const customerType = allowedCustomerTypes.includes(data.customerType)
+      ? data.customerType
+      : "Direct";
+
+    await fetch(
+      "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/dc71f37a-226a-49f5-ae92-f3f48d85348a",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          booking_id: data.id,
+          created_at: data.createdAt,
+          status: data.status,
+          customer_type: customerType,
+          services: Array.isArray(data.services) ? data.services : [],
+          next_action: data.nextAction || "",
+          notes: data.notes || "",
+          phone_full: `${data.phone?.code || ""}${data.phone?.number || ""}`,
+          first_name: data.firstName || "",
+          last_name: data.lastName || "",
+          email: data.email || "",
+          traveler_count: Array.isArray(data.travelers) ? data.travelers.length : 0
+        })
+      }
+    );
 
     const response = await fetch("https://services.leadconnectorhq.com/contacts/", {
       method: "POST",
@@ -55,10 +65,10 @@ await fetch("https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/web
         Version: "2021-07-28"
       },
       body: JSON.stringify({
-        firstName: data.firstName,
-        lastName: data.lastName,
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
         phone: `${data.phone?.code || ""}${data.phone?.number || ""}`,
-        email: data.email,
+        email: data.email || "",
         locationId: process.env.GHL_LOCATION_ID
       })
     });
@@ -73,7 +83,7 @@ await fetch("https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/web
       ghl: result
     });
   } catch (error) {
-    console.error(error);
+    console.error("Booking route error:", error);
 
     res.status(500).json({
       success: false,
