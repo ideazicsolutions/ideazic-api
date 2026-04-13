@@ -1,3 +1,4 @@
+const fetch = require("node-fetch");
 const express = require("express");
 const cors = require("cors");
 
@@ -6,10 +7,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use((req, res, next) => {
-  const apiKey = req.headers['x-api-key'];
+  const apiKey = req.headers["x-api-key"];
 
   if (!apiKey || apiKey !== process.env.API_SECRET_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   next();
@@ -27,19 +28,42 @@ app.post("/booking", async (req, res) => {
   console.log("New Booking:", data);
 
   try {
+    await fetch("https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/5da4f921-6e2b-4975-bdd2-3bdd1420ddc9", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        booking_id: data.id,
+        created_at: data.createdAt,
+        status: data.status,
+        customer_type: data.customerType,
+        services: data.services,
+        next_action: data.nextAction,
+        notes: data.notes,
+        phone_full: `${data.phone?.code || ""}${data.phone?.number || ""}`,
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email,
+        traveler_count: data.travelers?.length || 0
+      })
+    });
+
     const response = await fetch("https://services.leadconnectorhq.com/contacts/", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${process.env.GHL_API_KEY}`,
-    "Content-Type": "application/json",
-    "Version": "2021-07-28"
-  },
-  body: JSON.stringify({
-    firstName: data.name,
-    phone: data.phone,
-    locationId: process.env.GHL_LOCATION_ID
-  })
-});
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GHL_API_KEY}`,
+        "Content-Type": "application/json",
+        Version: "2021-07-28"
+      },
+      body: JSON.stringify({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: `${data.phone?.code || ""}${data.phone?.number || ""}`,
+        email: data.email,
+        locationId: process.env.GHL_LOCATION_ID
+      })
+    });
 
     const result = await response.json();
 
@@ -50,7 +74,6 @@ app.post("/booking", async (req, res) => {
       message: "Sent to GHL",
       ghl: result
     });
-
   } catch (error) {
     console.error(error);
 
