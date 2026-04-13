@@ -44,7 +44,7 @@ app.post("/booking", async (req, res) => {
           booking_id: data.id,
           created_at: data.createdAt,
           status: data.status,
-          customer_type: customerType,
+          customer_type: data.customerType,
           services: Array.isArray(data.services) ? data.services : [],
           next_action: data.nextAction || "",
           notes: data.notes || "",
