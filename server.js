@@ -27,8 +27,7 @@ app.post("/booking", async (req, res) => {
   console.log("New Booking:", data);
 
   try {
-    await fetch(https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/eda05b3b-029c-41c0-a1c4-608dbf66cf7b", {
-      method: "POST",
+await fetch("https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/eda05b3b-029c-41c0-a1c4-608dbf66cf7b", {      method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
