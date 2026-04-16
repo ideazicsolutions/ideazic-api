@@ -85,23 +85,6 @@ function toDateOnly(value) {
   return date.toISOString().slice(0, 10);
 }
 
-function mapCustomerType(value) {
-  const v = asString(value);
-  if (v === "Direct") return "Direct";
-  if (v === "Agency" || v === "Agency Partner" || v === "Referred" || v === "Reseller") return "Agency";
-  if (v === "Partner" || v === "Supplier") return "Partner";
-  return "Direct";
-}
-
-function mapStatus(value) {
-  const v = asString(value).toLowerCase();
-  if (v === "new") return "new";
-  if (v === "progress" || v === "in_progress") return "in_progress";
-  if (v === "waiting") return "waiting";
-  if (v === "done" || v === "completed") return "completed";
-  return "new";
-}
-
 function phoneFull(phone) {
   if (!phone || typeof phone !== "object") return "";
   return `${asString(phone.code)}${asString(phone.number)}`;
@@ -112,13 +95,94 @@ function safeNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-async function parseResponse(response) {
-  const text = await response.text();
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    return { raw: text };
-  }
+function mapCustomerType(value) {
+  const v = asString(value).toLowerCase();
+  if (["direct"].includes(v)) return "Direct";
+  if (["agency", "agency partner", "referred", "reseller"].includes(v)) return "Agency";
+  if (["partner", "supplier"].includes(v)) return "Partner";
+  return "Direct";
+}
+
+function mapBookingStatus(value) {
+  const v = asString(value).toLowerCase();
+  if (v === "new") return "new";
+  if (["progress", "in_progress", "in progress"].includes(v)) return "in_progress";
+  if (v === "waiting") return "waiting";
+  if (["done", "completed", "complete"].includes(v)) return "completed";
+  return "new";
+}
+
+function mapGender(value) {
+  const v = asString(value).toLowerCase();
+  if (["m", "male"].includes(v)) return "Male";
+  if (["f", "female"].includes(v)) return "Female";
+  return "";
+}
+
+function mapServices(values) {
+  const map = {
+    visa: "Visa",
+    hotel: "Hotel",
+    hotels: "Hotel",
+    ticket: "Ticket",
+    tickets: "Ticket",
+    transportation: "Transportation",
+    transport: "Transportation",
+    umrah: "Umrah",
+    hajj: "Hajj",
+    train: "Train",
+    trains: "Train"
+  };
+
+  const allowed = new Set([
+    "Visa",
+    "Hotel",
+    "Ticket",
+    "Transportation",
+    "Umrah",
+    "Hajj",
+    "Train"
+  ]);
+
+  return asArray(values)
+    .map((v) => map[asString(v).toLowerCase()] || "")
+    .filter((v) => allowed.has(v));
+}
+
+function mapTransportType(value) {
+  const v = asString(value).toLowerCase();
+
+  if (v.includes("bus")) return "Bus";
+  if (v.includes("van")) return "Van";
+  if (v.includes("train")) return "Train";
+  if (v.includes("car") || v.includes("sedan") || v.includes("suv")) return "Car";
+
+  return "Car";
+}
+
+function mapProviderPosition(value) {
+  const v = asString(value).toLowerCase();
+
+  if (v.includes("manager")) return "Manager";
+  if (v.includes("sales")) return "Sales";
+  if (v.includes("driver")) return "Driver";
+  if (v.includes("account")) return "Accountant";
+
+  return "Other";
+}
+
+function mapPaymentStatus(value) {
+  const v = asString(value).toLowerCase();
+  if (["paid"].includes(v)) return "Paid";
+  if (["partial", "partially paid"].includes(v)) return "Partial";
+  return "Pending";
+}
+
+function mapVisaStatus(value) {
+  const v = asString(value).toLowerCase();
+  if (["approved", "approve"].includes(v)) return "Approved";
+  if (["rejected", "reject", "denied"].includes(v)) return "Rejected";
+  return "Pending";
 }
 
 function buildDocuments(data, files) {
@@ -158,6 +222,15 @@ function buildDocuments(data, files) {
     .filter((doc) => doc.document_name || doc.upload_file);
 
   return [...uploaded, ...bodyOnly];
+}
+
+async function parseResponse(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { raw: text };
+  }
 }
 
 async function sendToWebhook(url, payload) {
@@ -235,9 +308,9 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const bookingPayload = {
       booking_id: bookingId,
       created_at: bookingCreatedAt,
-      status: mapStatus(data.status),
+      status: mapBookingStatus(data.status),
       customer_type: mapCustomerType(data.customerType),
-      services: asArray(data.services).map(asString).filter(Boolean),
+      services: mapServices(data.services),
       next_action: asString(data.nextAction),
       follow_up_date: toDateOnly(data.followUpDate || data.follow_up_date),
       notes: asString(data.notes),
@@ -256,7 +329,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       traveler_name: `${asString(traveler.firstName)} ${asString(traveler.lastName)}`.trim(),
       first_name: asString(traveler.firstName),
       last_name: asString(traveler.lastName),
-      gender: asString(traveler.gender),
+      gender: mapGender(traveler.gender),
       date_of_birth: toDateOnly(traveler.dob),
       nationality: asString(traveler.nationality),
       phone_full: phoneFull(traveler.phone),
@@ -277,7 +350,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       country: asString(visa.country),
       issue_date: toDateOnly(visa.issueDate),
       expiry_date: toDateOnly(visa.expiryDate),
-      status: asString(visa.status || "Pending"),
+      status: mapVisaStatus(visa.status),
       notes: asString(visa.notes)
     }));
 
@@ -313,7 +386,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       transport_route:
         asString(segment.route) ||
         `${asString(segment.from)} -> ${asString(segment.to)}`.trim(),
-      transport_type: asString(segment.vehicleType || segment.transportType),
+      transport_type: mapTransportType(segment.vehicleType || segment.transportType),
       departure_location: asString(segment.from || segment.departureLocation),
       arrival_location: asString(segment.to || segment.arrivalLocation),
       departure_time: toDateOnly(segment.date || segment.departureTime),
@@ -329,7 +402,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       category: asString(provider.category),
       company_name: asString(provider.companyName),
       contact_person: asString(provider.contactPerson),
-      position: asString(provider.position),
+      position: mapProviderPosition(provider.position),
       phone_full: phoneFull(provider.phone),
       notes: asString(provider.notes)
     }));
@@ -339,7 +412,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       booking_id: bookingId,
       currency: asString(data.financial?.currency || "USD"),
       payment_date: toDateOnly(data.financial?.paymentDate),
-      payment_status: asString(data.financial?.paymentStatus || "Pending"),
+      payment_status: mapPaymentStatus(data.financial?.paymentStatus),
       client_total: safeNumber(data.financial?.clientTotal),
       client_paid: safeNumber(data.financial?.clientPaid),
       client_pending: safeNumber(data.financial?.clientPending),
@@ -373,6 +446,16 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const providerResults = await sendMany(PROVIDER_WEBHOOK_URL, providerPayloads);
     const financialResult = await sendToWebhook(FINANCIAL_WEBHOOK_URL, financialPayload);
     const documentResults = await sendMany(DOCUMENT_WEBHOOK_URL, documentPayloads);
+
+    console.log("BOOKING RESULT:", bookingResult);
+    console.log("TRAVELERS RESULT:", travelerResults);
+    console.log("VISAS RESULT:", visaResults);
+    console.log("HOTELS RESULT:", hotelResults);
+    console.log("TICKETS RESULT:", ticketResults);
+    console.log("TRANSPORTS RESULT:", transportResults);
+    console.log("PROVIDERS RESULT:", providerResults);
+    console.log("FINANCIAL RESULT:", financialResult);
+    console.log("DOCUMENTS RESULT:", documentResults);
 
     // -------- CONTACT CREATE --------
     let contactResult = null;
