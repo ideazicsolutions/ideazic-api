@@ -4,11 +4,37 @@ const multer = require("multer");
 
 const app = express();
 
+// ---------------- WEBHOOK URLS ----------------
 const BOOKING_WEBHOOK_URL =
   "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/dc71f37a-226a-49f5-ae92-f3f48d85348a";
 
+const VISA_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/d205c7e0-b97c-4766-be55-2d5090efcd99";
+
+const TRAVELER_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/6b21f929-43a8-4bab-b7d2-2d4a47d0ccd3";
+
+const TRANSPORT_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/d124e038-b942-439a-a11e-d98e3fbe1ec8";
+
+const TICKET_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/79434a14-e565-493b-a9b7-7f80eeaeb77a";
+
+const PROVIDER_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/c4ccbc17-c032-4ccd-bc4c-a5de5c8f5b23";
+
+const HOTEL_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/35b2c3a2-65b0-4068-80ff-8538500ac103";
+
+const FINANCIAL_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/7f788d48-f016-41c6-9808-4c44fedb074e";
+
+const DOCUMENT_WEBHOOK_URL =
+  "https://services.leadconnectorhq.com/hooks/DQwQEDZeR14RV6YlCH1K/webhook-trigger/e0f5564f-5b5c-4d01-ba92-2cdf55d05f54";
+
 const CONTACTS_API_URL = "https://services.leadconnectorhq.com/contacts/";
 
+// ---------------- APP SETUP ----------------
 app.use(cors());
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
@@ -29,6 +55,7 @@ function apiAuth(req, res, next) {
   next();
 }
 
+// ---------------- HELPERS ----------------
 function parseJsonSafe(value, fallback) {
   if (value == null || value === "") return fallback;
   if (typeof value === "object") return value;
@@ -133,12 +160,53 @@ function buildDocuments(data, files) {
   return [...uploaded, ...bodyOnly];
 }
 
-// Test route
+async function sendToWebhook(url, payload) {
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await parseResponse(response);
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      payload,
+      result
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 500,
+      payload,
+      result: { error: error.message }
+    };
+  }
+}
+
+async function sendMany(url, items) {
+  const results = [];
+  for (const item of items) {
+    const hasUsefulData = Object.values(item).some((value) => {
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== "" && value != null;
+    });
+
+    if (!hasUsefulData) continue;
+    results.push(await sendToWebhook(url, item));
+  }
+  return results;
+}
+
+// ---------------- ROUTES ----------------
 app.get("/", (req, res) => {
   res.send("Ideazic API is running 🚀");
 });
 
-// Booking route
 app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
   try {
     const data = req.body.data ? parseJsonSafe(req.body.data, {}) : req.body;
@@ -154,135 +222,163 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       }))
     );
 
+    const bookingId = asString(data.id);
+    const bookingCreatedAt = toDateOnly(data.createdAt);
+    const customerFirstName = asString(data.firstName);
+    const customerLastName = asString(data.lastName);
+    const customerFullName = `${customerFirstName} ${customerLastName}`.trim();
+    const customerPhoneFull = phoneFull(data.phone);
+    const customerEmail = asString(data.email);
+    const documents = buildDocuments(data, files);
+
+    // -------- BOOKING --------
     const bookingPayload = {
-      booking_id: asString(data.id),
-      created_at: toDateOnly(data.createdAt),
+      booking_id: bookingId,
+      created_at: bookingCreatedAt,
       status: mapStatus(data.status),
       customer_type: mapCustomerType(data.customerType),
       services: asArray(data.services).map(asString).filter(Boolean),
       next_action: asString(data.nextAction),
       follow_up_date: toDateOnly(data.followUpDate || data.follow_up_date),
       notes: asString(data.notes),
-      phone_full: phoneFull(data.phone),
-      first_name: asString(data.firstName),
-      last_name: asString(data.lastName),
-      email: asString(data.email),
+      phone_full: customerPhoneFull,
+      first_name: customerFirstName,
+      last_name: customerLastName,
+      email: customerEmail,
       traveler_count: Array.isArray(data.travelers)
         ? data.travelers.length
-        : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0),
-
-      travelers: asArray(data.travelers).map((traveler) => ({
-        traveler_name: `${asString(traveler.firstName)} ${asString(traveler.lastName)}`.trim(),
-        first_name: asString(traveler.firstName),
-        last_name: asString(traveler.lastName),
-        gender: asString(traveler.gender),
-        date_of_birth: toDateOnly(traveler.dob),
-        nationality: asString(traveler.nationality),
-        phone_full: phoneFull(traveler.phone),
-        passport_number: asString(traveler.passportNumber),
-        passport_issue_date: toDateOnly(traveler.passportIssueDate),
-        passport_expiry: toDateOnly(traveler.passportExpiry),
-        notes: asString(traveler.notes)
-      })),
-
-      visas: asArray(data.visa).map((visa) => ({
-        visa_type: asString(visa.visaType),
-        traveler_name: asString(visa.travelerName),
-        country: asString(visa.country),
-        issue_date: toDateOnly(visa.issueDate),
-        expiry_date: toDateOnly(visa.expiryDate),
-        status: asString(visa.status || "Pending"),
-        notes: asString(visa.notes)
-      })),
-
-      hotels: asArray(data.hotels).map((hotel) => ({
-        hotel_name: asString(hotel.name),
-        city: asString(hotel.city),
-        room_type: asString(hotel.roomType),
-        meal_plan: asString(hotel.mealPlan),
-        check_in: toDateOnly(hotel.checkIn),
-        check_out: toDateOnly(hotel.checkOut),
-        number_of_rooms: safeNumber(hotel.numberOfRooms || hotel.number_of_rooms, 1),
-        notes: asString(hotel.notes)
-      })),
-
-      tickets: asArray(data.tickets).map((ticket) => ({
-        flight_number: asString(ticket.flightNumber),
-        airline: asString(ticket.airline),
-        departure_city: asString(ticket.departure?.city || ticket.departureCity),
-        arrival_city: asString(ticket.arrival?.city || ticket.arrivalCity),
-        departure_date: toDateOnly(ticket.departureDate),
-        arrival_date: toDateOnly(ticket.arrivalDate),
-        ticket_type: asString(ticket.ticketType || "One Way"),
-        notes: asString(ticket.notes)
-      })),
-
-      transports: asArray(data.transport?.segments).map((segment) => ({
-        transport_route:
-          asString(segment.route) ||
-          `${asString(segment.from)} -> ${asString(segment.to)}`.trim(),
-        transport_type: asString(segment.vehicleType || segment.transportType),
-        departure_location: asString(segment.from || segment.departureLocation),
-        arrival_location: asString(segment.to || segment.arrivalLocation),
-        departure_time: toDateOnly(segment.date || segment.departureTime),
-        arrival_time: toDateOnly(segment.arrivalTime || segment.date),
-        notes: asString(segment.notes)
-      })),
-
-      providers: asArray(data.providers).map((provider) => ({
-        provider_name: asString(provider.companyName || provider.providerName),
-        service_type: asString(provider.serviceType),
-        category: asString(provider.category),
-        company_name: asString(provider.companyName),
-        contact_person: asString(provider.contactPerson),
-        position: asString(provider.position),
-        phone_full: phoneFull(provider.phone),
-        notes: asString(provider.notes)
-      })),
-
-      financial: {
-        booking_id: asString(data.id),
-        currency: asString(data.financial?.currency || "USD"),
-        payment_date: toDateOnly(data.financial?.paymentDate),
-        payment_status: asString(data.financial?.paymentStatus || "Pending"),
-        client_total: safeNumber(data.financial?.clientTotal),
-        client_paid: safeNumber(data.financial?.clientPaid),
-        client_pending: safeNumber(data.financial?.clientPending),
-        provider_total: safeNumber(data.financial?.providerTotal),
-        provider_paid: safeNumber(data.financial?.providerPaid),
-        provider_pending: safeNumber(data.financial?.providerPending),
-        net_profit: safeNumber(data.financial?.netProfit),
-        notes: asString(data.financial?.notes)
-      },
-
-      documents: buildDocuments(data, files)
+        : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0)
     };
 
-    const webhookResponse = await fetch(BOOKING_WEBHOOK_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(bookingPayload)
-    });
+    // -------- TRAVELERS --------
+    const travelerPayloads = asArray(data.travelers).map((traveler) => ({
+      booking_id: bookingId,
+      traveler_name: `${asString(traveler.firstName)} ${asString(traveler.lastName)}`.trim(),
+      first_name: asString(traveler.firstName),
+      last_name: asString(traveler.lastName),
+      gender: asString(traveler.gender),
+      date_of_birth: toDateOnly(traveler.dob),
+      nationality: asString(traveler.nationality),
+      phone_full: phoneFull(traveler.phone),
+      passport_number: asString(traveler.passportNumber),
+      passport_issue_date: toDateOnly(traveler.passportIssueDate),
+      passport_expiry: toDateOnly(traveler.passportExpiry),
+      notes: asString(traveler.notes)
+    }));
 
-    const webhookResult = await parseResponse(webhookResponse);
+    // -------- VISAS --------
+    const visaPayloads = asArray(data.visa).map((visa, index) => ({
+      booking_id: bookingId,
+      visa_type: asString(visa.visaType),
+      traveler_name:
+        asString(visa.travelerName) ||
+        travelerPayloads[index]?.traveler_name ||
+        customerFullName,
+      country: asString(visa.country),
+      issue_date: toDateOnly(visa.issueDate),
+      expiry_date: toDateOnly(visa.expiryDate),
+      status: asString(visa.status || "Pending"),
+      notes: asString(visa.notes)
+    }));
 
-    if (!webhookResponse.ok) {
-      return res.status(500).json({
-        success: false,
-        message: "Webhook failed",
-        ghlWebhook: webhookResult
-      });
-    }
+    // -------- HOTELS --------
+    const hotelPayloads = asArray(data.hotels).map((hotel) => ({
+      booking_id: bookingId,
+      hotel_name: asString(hotel.name),
+      city: asString(hotel.city),
+      room_type: asString(hotel.roomType),
+      meal_plan: asString(hotel.mealPlan),
+      check_in: toDateOnly(hotel.checkIn),
+      check_out: toDateOnly(hotel.checkOut),
+      number_of_rooms: safeNumber(hotel.numberOfRooms || hotel.number_of_rooms, 1),
+      notes: asString(hotel.notes)
+    }));
 
+    // -------- TICKETS --------
+    const ticketPayloads = asArray(data.tickets).map((ticket) => ({
+      booking_id: bookingId,
+      flight_number: asString(ticket.flightNumber),
+      airline: asString(ticket.airline),
+      departure_city: asString(ticket.departure?.city || ticket.departureCity),
+      arrival_city: asString(ticket.arrival?.city || ticket.arrivalCity),
+      departure_date: toDateOnly(ticket.departureDate),
+      arrival_date: toDateOnly(ticket.arrivalDate),
+      ticket_type: asString(ticket.ticketType || "One Way"),
+      notes: asString(ticket.notes)
+    }));
+
+    // -------- TRANSPORT --------
+    const transportPayloads = asArray(data.transport?.segments).map((segment) => ({
+      booking_id: bookingId,
+      transport_route:
+        asString(segment.route) ||
+        `${asString(segment.from)} -> ${asString(segment.to)}`.trim(),
+      transport_type: asString(segment.vehicleType || segment.transportType),
+      departure_location: asString(segment.from || segment.departureLocation),
+      arrival_location: asString(segment.to || segment.arrivalLocation),
+      departure_time: toDateOnly(segment.date || segment.departureTime),
+      arrival_time: toDateOnly(segment.arrivalTime || segment.date),
+      notes: asString(segment.notes)
+    }));
+
+    // -------- PROVIDERS --------
+    const providerPayloads = asArray(data.providers).map((provider) => ({
+      booking_id: bookingId,
+      provider_name: asString(provider.providerName || provider.companyName),
+      service_type: asString(provider.serviceType),
+      category: asString(provider.category),
+      company_name: asString(provider.companyName),
+      contact_person: asString(provider.contactPerson),
+      position: asString(provider.position),
+      phone_full: phoneFull(provider.phone),
+      notes: asString(provider.notes)
+    }));
+
+    // -------- FINANCIAL --------
+    const financialPayload = {
+      booking_id: bookingId,
+      currency: asString(data.financial?.currency || "USD"),
+      payment_date: toDateOnly(data.financial?.paymentDate),
+      payment_status: asString(data.financial?.paymentStatus || "Pending"),
+      client_total: safeNumber(data.financial?.clientTotal),
+      client_paid: safeNumber(data.financial?.clientPaid),
+      client_pending: safeNumber(data.financial?.clientPending),
+      provider_total: safeNumber(data.financial?.providerTotal),
+      provider_paid: safeNumber(data.financial?.providerPaid),
+      provider_pending: safeNumber(data.financial?.providerPending),
+      net_profit: safeNumber(data.financial?.netProfit),
+      notes: asString(data.financial?.notes)
+    };
+
+    // -------- DOCUMENTS --------
+    const documentPayloads = documents.map((doc) => ({
+      booking_id: bookingId,
+      document_name: asString(doc.document_name),
+      document_type: asString(doc.document_type),
+      related_section: asString(doc.related_section),
+      related_name: asString(doc.related_name || customerFullName),
+      upload_file: asString(doc.upload_file),
+      document_date: toDateOnly(doc.document_date),
+      notes: asString(doc.notes),
+      status: asString(doc.status || "Active")
+    }));
+
+    // -------- SEND TO WEBHOOKS --------
+    const bookingResult = await sendToWebhook(BOOKING_WEBHOOK_URL, bookingPayload);
+    const travelerResults = await sendMany(TRAVELER_WEBHOOK_URL, travelerPayloads);
+    const visaResults = await sendMany(VISA_WEBHOOK_URL, visaPayloads);
+    const hotelResults = await sendMany(HOTEL_WEBHOOK_URL, hotelPayloads);
+    const ticketResults = await sendMany(TICKET_WEBHOOK_URL, ticketPayloads);
+    const transportResults = await sendMany(TRANSPORT_WEBHOOK_URL, transportPayloads);
+    const providerResults = await sendMany(PROVIDER_WEBHOOK_URL, providerPayloads);
+    const financialResult = await sendToWebhook(FINANCIAL_WEBHOOK_URL, financialPayload);
+    const documentResults = await sendMany(DOCUMENT_WEBHOOK_URL, documentPayloads);
+
+    // -------- CONTACT CREATE --------
     let contactResult = null;
     let contactOk = true;
 
-    const email = asString(data.email);
-    const phone = phoneFull(data.phone);
-
-    if (email || phone) {
+    if (customerEmail || customerPhoneFull) {
       try {
         const contactResponse = await fetch(CONTACTS_API_URL, {
           method: "POST",
@@ -292,10 +388,10 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
             Version: "2021-07-28"
           },
           body: JSON.stringify({
-            firstName: asString(data.firstName),
-            lastName: asString(data.lastName),
-            phone,
-            email,
+            firstName: customerFirstName,
+            lastName: customerLastName,
+            phone: customerPhoneFull,
+            email: customerEmail,
             locationId: process.env.GHL_LOCATION_ID
           })
         });
@@ -309,13 +405,20 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     }
 
     res.json({
-      success: true,
-      message: "Sent to GHL",
-      webhookSent: true,
-      contactProcessed: contactOk,
+      success: bookingResult.ok,
+      message: "Sent to GHL webhooks",
       uploadedFiles: files.length,
-      ghlWebhook: webhookResult,
-      ghlContact: contactResult
+      booking: bookingResult,
+      travelers: travelerResults,
+      visas: visaResults,
+      hotels: hotelResults,
+      tickets: ticketResults,
+      transports: transportResults,
+      providers: providerResults,
+      financial: financialResult,
+      documents: documentResults,
+      ghlContact: contactResult,
+      contactProcessed: contactOk
     });
   } catch (error) {
     console.error("Booking route error:", error);
@@ -333,4 +436,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Server running...");
 });
-
