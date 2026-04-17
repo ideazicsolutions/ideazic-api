@@ -149,11 +149,6 @@ function mapServices(values) {
     .filter((v) => allowed.has(v));
 }
 
-  return asArray(values)
-    .map((v) => map[asString(v).toLowerCase()] || "")
-    .filter((v) => allowed.has(v));
-}
-
 function mapTransportType(value) {
   const v = asString(value).toLowerCase();
 
@@ -323,7 +318,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const customerEmail = asString(data.email);
     const documents = buildDocuments(data, files);
 
-    // -------- BOOKING --------
     const bookingPayload = {
       booking_id: bookingId,
       created_at: bookingCreatedAt,
@@ -342,7 +336,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
         : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0)
     };
 
-    // -------- TRAVELERS --------
     const travelerPayloads = asArray(data.travelers).map((traveler) => ({
       booking_id: bookingId,
       traveler_name: `${asString(traveler.firstName)} ${asString(traveler.lastName)}`.trim(),
@@ -358,7 +351,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(traveler.notes)
     }));
 
-    // -------- VISAS --------
     const visaPayloads = asArray(data.visa).map((visa, index) => ({
       booking_id: bookingId,
       visa_type: asString(visa.visaType),
@@ -373,7 +365,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(visa.notes)
     }));
 
-    // -------- HOTELS --------
     const hotelPayloads = asArray(data.hotels).map((hotel) => ({
       booking_id: bookingId,
       hotel_name: asString(hotel.name),
@@ -386,7 +377,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(hotel.notes)
     }));
 
-    // -------- TICKETS --------
     const ticketPayloads = asArray(data.tickets).map((ticket) => ({
       booking_id: bookingId,
       flight_number: asString(ticket.flightNumber),
@@ -399,7 +389,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(ticket.notes)
     }));
 
-    // -------- TRANSPORT --------
     const transportPayloads = asArray(data.transport?.segments).map((segment) => ({
       booking_id: bookingId,
       transport_route:
@@ -413,7 +402,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(segment.notes)
     }));
 
-    // -------- PROVIDERS --------
     const providerPayloads = asArray(data.providers).map((provider) => ({
       booking_id: bookingId,
       provider_name: asString(provider.providerName || provider.companyName),
@@ -426,7 +414,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(provider.notes)
     }));
 
-    // -------- FINANCIAL --------
     const financialPayload = {
       booking_id: bookingId,
       currency: asString(data.financial?.currency || "USD"),
@@ -442,7 +429,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       notes: asString(data.financial?.notes)
     };
 
-    // -------- DOCUMENTS --------
     const documentPayloads = documents.map((doc) => ({
       booking_id: bookingId,
       document_name: asString(doc.document_name),
@@ -455,7 +441,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
       status: asString(doc.status || "Active")
     }));
 
-    // -------- SEND TO WEBHOOKS --------
     const bookingResult = await sendToWebhook(BOOKING_WEBHOOK_URL, bookingPayload);
     const travelerResults = await sendMany(TRAVELER_WEBHOOK_URL, travelerPayloads);
     const visaResults = await sendMany(VISA_WEBHOOK_URL, visaPayloads);
@@ -466,6 +451,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const financialResult = await sendToWebhook(FINANCIAL_WEBHOOK_URL, financialPayload);
     const documentResults = await sendMany(DOCUMENT_WEBHOOK_URL, documentPayloads);
 
+    console.log("BOOKING PAYLOAD:", bookingPayload);
     console.log("BOOKING RESULT:", bookingResult);
     console.log("TRAVELERS RESULT:", travelerResults);
     console.log("VISAS RESULT:", visaResults);
@@ -476,7 +462,6 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     console.log("FINANCIAL RESULT:", financialResult);
     console.log("DOCUMENTS RESULT:", documentResults);
 
-    // -------- CONTACT CREATE --------
     let contactResult = null;
     let contactOk = true;
 
