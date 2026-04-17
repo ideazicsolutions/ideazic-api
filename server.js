@@ -171,6 +171,20 @@ function mapProviderPosition(value) {
   return "Other";
 }
 
+function mapProviderServiceType(value) {
+  const v = asString(value).toLowerCase();
+
+  if (v.includes("visa")) return "Visa";
+  if (v.includes("hotel")) return "Hotel";
+  if (v.includes("ticket")) return "Ticket";
+  if (v.includes("transport")) return "Transportation";
+  if (v.includes("umrah")) return "Umrah";
+  if (v.includes("hajj")) return "Hajj";
+  if (v.includes("train")) return "Train";
+
+  return "Other";
+}
+
 function mapPaymentStatus(value) {
   const v = asString(value).toLowerCase();
   if (["paid"].includes(v)) return "Paid";
@@ -398,7 +412,7 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const providerPayloads = asArray(data.providers).map((provider) => ({
       booking_id: bookingId,
       provider_name: asString(provider.providerName || provider.companyName),
-      service_type: asString(provider.serviceType),
+      service_type: mapProviderServiceType(provider.serviceType),
       category: asString(provider.category),
       company_name: asString(provider.companyName),
       contact_person: asString(provider.contactPerson),
