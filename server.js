@@ -319,22 +319,22 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const documents = buildDocuments(data, files);
 
     const bookingPayload = {
-      booking_id: bookingId,
-      created_at: bookingCreatedAt,
-      status: mapBookingStatus(data.status),
-      customer_type: mapCustomerType(data.customerType),
-      services: mapServices(data.services),
-      next_action: asString(data.nextAction),
-      follow_up_date: toDateOnly(data.followUpDate || data.follow_up_date),
-      notes: asString(data.notes),
-      phone_full: customerPhoneFull,
-      first_name: customerFirstName,
-      last_name: customerLastName,
-      email: customerEmail,
-      traveler_count: Array.isArray(data.travelers)
-        ? data.travelers.length
-        : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0)
-    };
+  booking_id: bookingId,
+  created_at: bookingCreatedAt,
+  status: mapBookingStatus(data.status),
+  customer_type: mapCustomerType(data.customerType),
+  services: mapServices(data.services).join(","),
+  next_action: asString(data.nextAction),
+  follow_up_date: toDateOnly(data.followUpDate || data.follow_up_date),
+  notes: asString(data.notes),
+  phone_full: customerPhoneFull,
+  first_name: customerFirstName,
+  last_name: customerLastName,
+  email: customerEmail,
+  traveler_count: Array.isArray(data.travelers)
+    ? data.travelers.length
+    : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0)
+};
 
     const travelerPayloads = asArray(data.travelers).map((traveler) => ({
       booking_id: bookingId,
