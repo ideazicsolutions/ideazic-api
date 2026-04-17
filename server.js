@@ -121,28 +121,33 @@ function mapGender(value) {
 
 function mapServices(values) {
   const map = {
-    visa: "Visa",
-    hotel: "Hotel",
-    hotels: "Hotel",
-    ticket: "Ticket",
-    tickets: "Ticket",
-    transportation: "Transportation",
-    transport: "Transportation",
-    umrah: "Umrah",
-    hajj: "Hajj",
-    train: "Train",
-    trains: "Train"
+    visa: "visa",
+    hotel: "hotel",
+    hotels: "hotel",
+    ticket: "ticket",
+    tickets: "ticket",
+    transportation: "transportation",
+    transport: "transportation",
+    umrah: "umrah",
+    hajj: "hajj",
+    train: "train",
+    trains: "train"
   };
 
   const allowed = new Set([
-    "Visa",
-    "Hotel",
-    "Ticket",
-    "Transportation",
-    "Umrah",
-    "Hajj",
-    "Train"
+    "visa",
+    "hotel",
+    "ticket",
+    "transportation",
+    "umrah",
+    "hajj",
+    "train"
   ]);
+
+  return asArray(values)
+    .map((v) => map[asString(v).toLowerCase()] || "")
+    .filter((v) => allowed.has(v));
+}
 
   return asArray(values)
     .map((v) => map[asString(v).toLowerCase()] || "")
