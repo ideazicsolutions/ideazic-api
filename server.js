@@ -1,8 +1,48 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
+const { Pool } = require("pg");
 
 const app = express();
+
+// ---------------- DATABASE ----------------
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+pool.on("error", (err) => {
+  console.error("Postgres pool error ❌", err);
+});
+
+async function initDatabase() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id SERIAL PRIMARY KEY,
+        booking_id TEXT,
+        created_at TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        client TEXT,
+        phone TEXT,
+        email TEXT,
+        services TEXT,
+        status TEXT,
+        customer_type TEXT,
+        notes TEXT,
+        traveler_count INTEGER,
+        raw_payload JSONB,
+        inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("Bookings table ready ✅");
+  } catch (err) {
+    console.error("DB init error ❌", err);
+  }
+}
+
+initDatabase();
 
 // ---------------- WEBHOOK URLS ----------------
 const BOOKING_WEBHOOK_URL =
@@ -294,6 +334,22 @@ app.get("/", (req, res) => {
   res.send("Ideazic API is running 🚀");
 });
 
+app.get("/bookings", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM bookings ORDER BY inserted_at DESC, id DESC"
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get bookings error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch bookings",
+      error: error.message
+    });
+  }
+});
+
 app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
   try {
     const data = req.body.data ? parseJsonSafe(req.body.data, {}) : req.body;
@@ -319,22 +375,49 @@ app.post("/booking", apiAuth, upload.array("files"), async (req, res) => {
     const documents = buildDocuments(data, files);
 
     const bookingPayload = {
-  booking_id: bookingId,
-  created_at: bookingCreatedAt,
-  status: mapBookingStatus(data.status),
-  customer_type: mapCustomerType(data.customerType),
-  services: mapServices(data.services).join(","),
-  next_action: asString(data.nextAction),
-  follow_up_date: toDateOnly(data.followUpDate || data.follow_up_date),
-  notes: asString(data.notes),
-  phone_full: customerPhoneFull,
-  first_name: customerFirstName,
-  last_name: customerLastName,
-  email: customerEmail,
-  traveler_count: Array.isArray(data.travelers)
-    ? data.travelers.length
-    : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0)
-};
+      booking_id: bookingId,
+      created_at: bookingCreatedAt,
+      status: mapBookingStatus(data.status),
+      customer_type: mapCustomerType(data.customerType),
+      services: mapServices(data.services).join(","),
+      next_action: asString(data.nextAction),
+      follow_up_date: toDateOnly(data.followUpDate || data.follow_up_date),
+      notes: asString(data.notes),
+      phone_full: customerPhoneFull,
+      first_name: customerFirstName,
+      last_name: customerLastName,
+      email: customerEmail,
+      traveler_count: Array.isArray(data.travelers)
+        ? data.travelers.length
+        : safeNumber(data.travellerCount || data.travelerCount || data.travellersCount, 0)
+    };
+
+    try {
+      await pool.query(
+        `INSERT INTO bookings
+          (booking_id, created_at, first_name, last_name, client, phone, email, services, status, customer_type, notes, traveler_count, raw_payload)
+         VALUES
+          ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          bookingPayload.booking_id,
+          bookingPayload.created_at,
+          bookingPayload.first_name,
+          bookingPayload.last_name,
+          customerFullName,
+          bookingPayload.phone_full,
+          bookingPayload.email,
+          bookingPayload.services,
+          bookingPayload.status,
+          bookingPayload.customer_type,
+          bookingPayload.notes,
+          bookingPayload.traveler_count,
+          JSON.stringify(data)
+        ]
+      );
+      console.log("Saved to DB ✅");
+    } catch (dbError) {
+      console.error("DB save error ❌", dbError);
+    }
 
     const travelerPayloads = asArray(data.travelers).map((traveler) => ({
       booking_id: bookingId,
